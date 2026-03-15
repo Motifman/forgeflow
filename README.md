@@ -22,11 +22,23 @@ This separation is the core design:
 
 ### 1. Install with `uv`
 
+GitHub から clone せずにそのまま install できます。
+
+```bash
+uv tool install git+https://github.com/Motifman/forgeflow.git
+```
+
+更新する場合:
+
+```bash
+uv tool upgrade forgeflow
+```
+
+ローカル clone から使う開発時は、こちらでも install できます。
+
 ```bash
 uv tool install --from /path/to/forgeflow forgeflow
 ```
-
-ローカル clone から使う間は、開発中の最新版をそのまま install できます。
 
 ### 2. Install Codex skills
 
