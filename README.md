@@ -1,26 +1,172 @@
 # forgeflow
 
-`forgeflow` は、Codex と Cursor の両方で使う実装ワークフローを単一の正本として管理するための repository です。
+Portable agent workflow tooling for Codex and Cursor.
+Codex / Cursor 向けの再現可能な開発ワークフローを、どのプロジェクトにもすぐ入れられる形で配布するためのツールです。
 
-目的は 2 つです。
+## What It Is / これは何か
 
-- workflow 定義を project repository から分離し、ワークツリーやブランチに依存しない形で運用する
-- Codex と Cursor の両方に同じ workflow を配布しつつ、runtime artifact は各 project に生成する
+`forgeflow` keeps two things separate:
 
-## 構成
+- Static workflow definition
+- Per-project runtime artifacts
+
+つまり、このリポジトリが持つのは workflow 本体です。各 project 側には `.ai-workflow/` だけを生成し、そこで意思決定と進捗を追跡します。
+
+This separation is the core design:
+
+- Reproducibility: every project uses the same skill set
+- Speed: agents do not need to reinvent the workflow each time
+- Traceability: intent, plan, execution deltas, and review results remain in artifacts
+
+## Quickstart / クイックスタート
+
+### 1. Install with `uv`
+
+```bash
+uv tool install --from /path/to/forgeflow forgeflow
+```
+
+ローカル clone から使う間は、開発中の最新版をそのまま install できます。
+
+### 2. Install Codex skills
+
+```bash
+forgeflow install-codex --force
+```
+
+This installs:
+
+- Codex skills into `~/.codex/skills`
+- fallback launcher only if `forgeflow` is not already on your `PATH`
+
+### 3. Bootstrap a project
+
+```bash
+cd /path/to/your-project
+forgeflow setup-project --project . --export-cursor --force
+```
+
+This creates:
+
+- `.ai-workflow/ideas/`
+- `.ai-workflow/features/`
+- `.ai-workflow/README.md`
+- `.cursor/skills/` when `--export-cursor` is enabled
+
+## Core Commands / 主要コマンド
+
+```bash
+forgeflow install-codex --force
+forgeflow setup-project --project . --export-cursor --force
+forgeflow export-cursor --project . --force
+forgeflow new-idea --project . --slug guild-market
+forgeflow init-feature --project . --slug guild-market
+forgeflow status --project . --slug guild-market
+forgeflow doctor --project . --slug guild-market
+forgeflow version
+```
+
+## Workflow / ワークフロー
+
+The default lifecycle is:
+
+1. `flow-idea`
+2. `flow-plan`
+3. `flow-exec`
+4. `flow-review`
+5. `flow-ship`
+
+### `flow-idea`
+
+Turns a rough idea into a concrete implementation candidate.
+雑な要望を、後で実装計画に昇格できる粒度まで具体化します。
+
+### `flow-plan`
+
+Creates a phase-based plan with explicit scope, success criteria, and alignment checkpoints.
+phase 分割された計画を作り、scope と成功条件を固定します。
+
+### `flow-exec`
+
+Implements only the current phase, updates artifacts, and records what changed.
+今の phase だけを実装し、学習した差分を artifact に戻します。
+
+### `flow-review`
+
+Checks implementation quality, testing rigor, and release readiness.
+実装品質、テスト品質、出荷可否を確認します。
+
+### `flow-ship`
+
+Summarizes what shipped and how it is ready to land.
+最終成果と merge / PR 動線を明示します。
+
+## Glossary / 用語
+
+### Static workflow definition
+
+Shared files in this repository:
+
+- skill definitions
+- templates
+- references
+- install/export logic
+
+### Runtime artifacts
+
+Files created inside each target project under `.ai-workflow/`:
+
+- idea notes
+- feature plans
+- progress journals
+- review results
+- ship summaries
+
+### Alignment loop
+
+A short decision loop to reduce drift between:
+
+- what the human wants to build
+- what the agent currently predicts it should build
+
+`forgeflow` is optimized around this problem. 目的は会話を増やすことではなく、ズレを早く露出して修正することです。
+
+## Workflow Design Principles / 設計原則
+
+### 1. Reproducibility first
+
+A good run should be easy to repeat with another agent or another session.
+同じ project なら、別セッションでも同じ流れを再現できることを優先します。
+
+### 2. Speed through explicit decisions
+
+Free-form notes are hard to validate. `forgeflow` pushes decisions into explicit fields such as:
+
+- `Proposal`
+- `Selected option`
+- `Assumptions`
+- `Reopen alignment if`
+
+### 3. State-machine style gates
+
+`forgeflow doctor` treats missing decisions and broken stage gates as workflow defects.
+つまり「だいたい埋まっている」ではなく、「次に進んでよい条件を満たしているか」を見ます。
+
+### 4. Execution may learn, but not drift silently
+
+During implementation, the agent may discover new constraints. That is allowed.
+ただし、scope delta や alignment 再開条件を artifact に残さない変更は許しません。
+
+## Repository Layout / 構成
 
 ```text
 forgeflow/
   README.md
-  shared/
-    templates/
-    references/
-    runtime/
-  targets/
-    codex/
-      skills/
-    cursor/
-      skills/
+  pyproject.toml
+  src/forgeflow/
+    cli.py
+    shared/
+    targets/
   scripts/
     forgeflow.py
     install_codex.sh
@@ -28,84 +174,26 @@ forgeflow/
     bootstrap_project.sh
 ```
 
-## 役割分担
+## Packaging Notes / パッケージ管理メモ
 
-### この repo に置くもの
+`uv` is the primary install path.
 
-- workflow の説明
-- skill 定義
-- template
-- reference
-- install / export / setup script
+- End users should prefer `uv tool install`
+- Repo scripts remain as thin wrappers for local development
+- The Python package now carries the shared templates and skills used by the CLI
 
-### 各 project に生成するもの
+## Current Improvement Direction / 今後の改善軸
 
-- `.ai-workflow/ideas/`
-- `.ai-workflow/features/`
-- `.ai-workflow/README.md`
-- 実際の `IDEA.md`, `PLAN.md`, `PROGRESS.md`, `REVIEW.md`, `SUMMARY.md`
+This repository should optimize for:
 
-## インストール方針
+- faster intent alignment
+- lower workflow variance between runs
+- safer install and export behavior
+- clearer onboarding for first-time users
 
-### Codex
+直近では次が重要です。
 
-- `install_codex.sh` で global skill を symlink install する
-- 同時に `forgeflow` CLI を `~/.local/bin/forgeflow` に置く
-
-### Cursor
-
-- Cursor には Codex と同等の global skill directory は前提にしない
-- `export_cursor_skills.sh` で project の `.cursor/skills/` へ同期する
-- 同じく `forgeflow` CLI を使って project bootstrap を行う
-
-## セットアップ
-
-### 1. forgeflow repo を clone する
-
-```bash
-git clone <your-forgeflow-repo>
-cd forgeflow
-```
-
-### 2. Codex に global install する
-
-```bash
-./scripts/install_codex.sh
-```
-
-### 3. project を bootstrap する
-
-```bash
-forgeflow setup-project --project /path/to/project
-```
-
-Cursor でもすぐ使いたい場合:
-
-```bash
-forgeflow setup-project --project /path/to/project --export-cursor
-```
-
-または:
-
-```bash
-./scripts/bootstrap_project.sh /path/to/project
-```
-
-## 代表コマンド
-
-```bash
-python forgeflow/scripts/forgeflow.py setup-project --project /path/to/project
-python forgeflow/scripts/forgeflow.py setup-project --project /path/to/project --export-cursor
-python forgeflow/scripts/forgeflow.py new-idea --project /path/to/project --slug guild-market
-python forgeflow/scripts/forgeflow.py init-feature --project /path/to/project --slug guild-market
-python forgeflow/scripts/forgeflow.py status --project /path/to/project --slug guild-market
-python forgeflow/scripts/forgeflow.py doctor --project /path/to/project --slug guild-market
-```
-
-## 設計メモ
-
-- static workflow definition と runtime artifact は分ける
-- 質問ループと alignment loop は skill 側の責務
-- project 側 `.ai-workflow` は成果物置き場として保つ
-- CLI は project をまたいで再利用できるよう、共有 template を repo 内から読む
-- Cursor は project ごと export、Codex は global install という非対称モデルを採る
+- install / update / uninstall の lifecycle を CLI に寄せる
+- README の first-run 体験をさらに短くする
+- workflow gate を `doctor` でさらに厳密にする
+- install banner / logo を最終導線に合わせて入れる
