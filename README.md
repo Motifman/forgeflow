@@ -176,9 +176,15 @@ forgeflow/
   README.md
   pyproject.toml
   src/forgeflow/
+    __init__.py
     cli.py
     shared/
+      references/
+      runtime/
+      templates/
     targets/
+      codex/skills/
+      cursor/skills/
   scripts/
     forgeflow.py
     install_codex.sh
@@ -192,7 +198,7 @@ forgeflow/
 
 - End users should prefer `uv tool install`
 - Repo scripts remain as thin wrappers for local development
-- The Python package now carries the shared templates and skills used by the CLI
+- The Python package under `src/forgeflow/` is the single source of truth for shared templates and skills
 
 ## Current Improvement Direction / 今後の改善軸
 
