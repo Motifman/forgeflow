@@ -24,6 +24,8 @@ branch: codex/example-feature
 - Commit:
 - Tests:
 - Findings:
+- Plan revision check:
+- User approval:
 - Plan updates:
 - Goal check:
 - Scope delta:
@@ -37,6 +39,8 @@ branch: codex/example-feature
 - Commit:
 - Tests:
 - Findings:
+- Plan revision check:
+- User approval:
 - Plan updates:
 - Goal check:
 - Scope delta:

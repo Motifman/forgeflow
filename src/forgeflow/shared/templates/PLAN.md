@@ -81,6 +81,13 @@ State the original goal in one concise paragraph.
 - Scope delta:
 - User re-confirmation needed:
 
+# Plan Revision Gate
+
+- Revise future phases when:
+- Keep future phases unchanged when:
+- Ask user before editing future phases or adding a new phase:
+- Plan-change commit needed when:
+
 # Change Log
 
 - 2026-03-15: Initial plan created

@@ -330,6 +330,8 @@ def _check_feature(feature_dir: Path) -> list[str]:
     for header in ("Objective", "Success Criteria", "Alignment Loop", "Scope Contract", "Review Standard", "Execution Deltas", "Change Log"):
         if not _has_header(plan_text, header):
             findings.append(f"PLAN.md missing {header} section")
+    if not _has_header(plan_text, "Plan Revision Gate"):
+        findings.append("PLAN.md missing Plan Revision Gate section")
     objective_match = re.search(r"(?s)# Objective\n\n(.+?)(?:\n# |\Z)", plan_text)
     if not objective_match or _looks_like_placeholder(objective_match.group(1)):
         findings.append("PLAN.md objective is still placeholder or empty")
@@ -348,6 +350,14 @@ def _check_feature(feature_dir: Path) -> list[str]:
     ):
         if not _has_nonempty_bullet(plan_text, label):
             findings.append(f"PLAN.md missing alignment value for '{label}'")
+    for label in (
+        "Revise future phases when",
+        "Keep future phases unchanged when",
+        "Ask user before editing future phases or adding a new phase",
+        "Plan-change commit needed when",
+    ):
+        if not _has_nonempty_bullet(plan_text, label):
+            findings.append(f"PLAN.md missing plan revision value for '{label}'")
 
     phase_blocks = _extract_phase_blocks(plan_text)
     if not phase_blocks:
@@ -371,7 +381,7 @@ def _check_feature(feature_dir: Path) -> list[str]:
             start = match.start()
             end = journal_matches[index].start() if index < len(journal_matches) else len(progress_text)
             block = progress_text[start:end]
-            for field in ("Started", "Completed", "Commit", "Tests", "Findings", "Plan updates", "Goal check", "Scope delta", "Handoff summary", "Next-phase impact"):
+            for field in ("Started", "Completed", "Commit", "Tests", "Findings", "Plan revision check", "User approval", "Plan updates", "Goal check", "Scope delta", "Handoff summary", "Next-phase impact"):
                 if not _has_nonempty_bullet(block, field):
                     findings.append(f"PROGRESS.md phase journal {index} is missing a value for '{field}'")
 
