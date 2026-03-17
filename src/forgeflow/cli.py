@@ -23,6 +23,7 @@ CODEX_SKILLS_DIR = PACKAGE_ROOT / "targets" / "codex" / "skills"
 TEMPLATE_FILES = ("IDEA.md", "PLAN.md", "PROGRESS.md", "REVIEW.md", "SUMMARY.md")
 VALID_STATUSES = {"idea", "planned", "in_progress", "review", "done", "dropped"}
 REQUIRED_FRONTMATTER_KEYS = ("id", "title", "slug", "status", "created_at", "updated_at")
+FORGEFLOW_MANAGED_MARKER = ".forgeflow-managed"
 PLAN_PHASE_FIELDS = (
     "Goal",
     "Scope",
@@ -177,10 +178,23 @@ def _print_next_steps(project_root: Path, export_cursor: bool) -> None:
 def setup_project(args: argparse.Namespace) -> int:
     project_root = _project_root(args.project)
     runtime_dir = _ensure_runtime(project_root)
-    if getattr(args, "export_cursor", False):
-        export_cursor(argparse.Namespace(project=str(project_root), force=args.force))
+    if getattr(args, "install_cursor_skills", False) or getattr(args, "export_cursor", False):
+        result = install_skills(
+            argparse.Namespace(
+                target="cursor",
+                scope="project",
+                project=str(project_root),
+                cursor_home=None,
+                codex_home=None,
+                bin_dir=None,
+                upgrade=_should_upgrade(args),
+                force=False,
+            )
+        )
+        if result != 0:
+            return result
     print(f"Initialized runtime at {runtime_dir}")
-    _print_next_steps(project_root, getattr(args, "export_cursor", False))
+    _print_next_steps(project_root, getattr(args, "install_cursor_skills", False) or getattr(args, "export_cursor", False))
     return 0
 
 
@@ -223,6 +237,72 @@ def init_feature(args: argparse.Namespace) -> int:
 
 def _feature_dir(project_root: Path, slug: str) -> Path:
     return _features_dir(project_root) / _slugify(slug)
+
+
+def _should_upgrade(args: argparse.Namespace) -> bool:
+    return bool(getattr(args, "upgrade", False) or getattr(args, "force", False))
+
+
+def _skill_source_dir(target: str) -> Path:
+    if target == "codex":
+        return CODEX_SKILLS_DIR
+    if target == "cursor":
+        return CURSOR_SKILLS_DIR
+    raise ValueError(f"unsupported target: {target}")
+
+
+def _skill_target_dir(args: argparse.Namespace, target: str, scope: str) -> Path:
+    if scope == "project":
+        project_root = _project_root(getattr(args, "project", None))
+        return project_root / f".{target}" / "skills"
+    if target == "codex":
+        codex_home = Path(getattr(args, "codex_home", None) or os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
+        return codex_home / "skills"
+    if target == "cursor":
+        cursor_home = Path(getattr(args, "cursor_home", None) or os.environ.get("CURSOR_HOME", Path.home() / ".cursor")).expanduser()
+        return cursor_home / "skills"
+    raise ValueError(f"unsupported target: {target}")
+
+
+def _iter_skill_dirs(source_dir: Path) -> list[Path]:
+    return sorted((path for path in source_dir.iterdir() if path.is_dir()), key=lambda path: path.name)
+
+
+def _install_copied_skills(source_dir: Path, target_dir: Path, upgrade: bool, label: str) -> int:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for skill_dir in _iter_skill_dirs(source_dir):
+        destination = target_dir / skill_dir.name
+        if destination.exists():
+            if not upgrade:
+                print(f"existing skill found: {destination}")
+                print("rerun with --upgrade or -U to replace forgeflow-managed skills")
+                return 1
+            if destination.is_symlink() or destination.is_file():
+                destination.unlink()
+            else:
+                shutil.rmtree(destination)
+        shutil.copytree(skill_dir, destination)
+        print(f"installed {label} skill: {destination}")
+    _write(target_dir / FORGEFLOW_MANAGED_MARKER, f"version={__version__}\n")
+    return 0
+
+
+def _install_symlinked_codex_skills(target_dir: Path, upgrade: bool) -> int:
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for skill_dir in _iter_skill_dirs(CODEX_SKILLS_DIR):
+        target = target_dir / skill_dir.name
+        if target.exists() or target.is_symlink():
+            if not upgrade:
+                print(f"existing skill found: {target}")
+                print("rerun with --upgrade or -U to replace forgeflow-managed skills")
+                return 1
+            if target.is_symlink() or target.is_file():
+                target.unlink()
+            else:
+                shutil.rmtree(target)
+        target.symlink_to(skill_dir)
+        print(f"linked codex skill: {target}")
+    return 0
 
 
 def status(args: argparse.Namespace) -> int:
@@ -444,71 +524,55 @@ def doctor(args: argparse.Namespace) -> int:
     return 1 if has_error else 0
 
 
+def install_skills(args: argparse.Namespace) -> int:
+    target = args.target
+    scope = args.scope or ("global" if target == "codex" else "project")
+    upgrade = _should_upgrade(args)
+    target_dir = _skill_target_dir(args, target, scope)
+
+    if target == "codex" and scope == "global":
+        result = _install_symlinked_codex_skills(target_dir, upgrade)
+        if result != 0:
+            return result
+        existing_cli = shutil.which("forgeflow")
+        if existing_cli:
+            print(f"forgeflow CLI available at {existing_cli}")
+            return 0
+        bin_dir = Path(getattr(args, "bin_dir", None) or Path.home() / ".local" / "bin").expanduser()
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        launcher = bin_dir / "forgeflow"
+        launcher.write_text(
+            "\n".join(
+                [
+                    "#!/usr/bin/env bash",
+                    "set -euo pipefail",
+                    f'exec "{sys.executable}" "{PACKAGE_ROOT / "cli.py"}" "$@"',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        launcher.chmod(0o755)
+        print(f"installed fallback forgeflow CLI to {launcher}")
+        if str(bin_dir) not in os.environ.get("PATH", ""):
+            print(f"add {bin_dir} to PATH if needed")
+        return 0
+
+    source_dir = _skill_source_dir(target)
+    label = f"{target} ({scope})"
+    return _install_copied_skills(source_dir, target_dir, upgrade, label)
+
+
 def export_cursor(args: argparse.Namespace) -> int:
-    project_root = _project_root(args.project)
-    target_dir = project_root / ".cursor" / "skills"
-    if target_dir.exists() and any(target_dir.iterdir()) and not args.force:
-        print(f"cursor skills directory is not empty: {target_dir}")
-        print("rerun with --force to replace forgeflow-managed skills")
-        return 1
-    target_dir.mkdir(parents=True, exist_ok=True)
-    for skill_dir in CURSOR_SKILLS_DIR.iterdir():
-        if not skill_dir.is_dir():
-            continue
-        destination = target_dir / skill_dir.name
-        if destination.exists():
-            shutil.rmtree(destination)
-        shutil.copytree(skill_dir, destination)
-    _write(target_dir / ".forgeflow-managed", f"version={__version__}\n")
-    print(f"Exported Cursor skills to {target_dir}")
-    return 0
+    args.target = "cursor"
+    args.scope = "project"
+    return install_skills(args)
 
 
 def install_codex(args: argparse.Namespace) -> int:
-    codex_home = Path(args.codex_home or os.environ.get("CODEX_HOME", Path.home() / ".codex")).expanduser()
-    skills_dir = codex_home / "skills"
-    bin_dir = Path(args.bin_dir or Path.home() / ".local" / "bin").expanduser()
-    skills_dir.mkdir(parents=True, exist_ok=True)
-
-    for skill_dir in CODEX_SKILLS_DIR.iterdir():
-        if not skill_dir.is_dir():
-            continue
-        target = skills_dir / skill_dir.name
-        if target.exists() or target.is_symlink():
-            if not args.force:
-                print(f"existing skill found: {target}")
-                print("rerun with --force to replace forgeflow-managed skills")
-                return 1
-            if target.is_symlink() or target.is_file():
-                target.unlink()
-            else:
-                shutil.rmtree(target)
-        target.symlink_to(skill_dir)
-        print(f"linked codex skill: {target}")
-
-    existing_cli = shutil.which("forgeflow")
-    if existing_cli:
-        print(f"forgeflow CLI available at {existing_cli}")
-        return 0
-
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    launcher = bin_dir / "forgeflow"
-    launcher.write_text(
-        "\n".join(
-            [
-                "#!/usr/bin/env bash",
-                "set -euo pipefail",
-                f'exec "{sys.executable}" "{PACKAGE_ROOT / "cli.py"}" "$@"',
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    launcher.chmod(0o755)
-    print(f"installed fallback forgeflow CLI to {launcher}")
-    if str(bin_dir) not in os.environ.get("PATH", ""):
-        print(f"add {bin_dir} to PATH if needed")
-    return 0
+    args.target = "codex"
+    args.scope = "global"
+    return install_skills(args)
 
 
 def version(_: argparse.Namespace) -> int:
@@ -520,21 +584,36 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="forgeflow workflow CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    install_codex_parser = subparsers.add_parser("install-codex", help="Install Codex skills and a forgeflow launcher")
+    install_skills_parser = subparsers.add_parser("install-skills", help="Install forgeflow skills for Codex or Cursor")
+    install_skills_parser.add_argument("--target", choices=("codex", "cursor"), required=True)
+    install_skills_parser.add_argument("--scope", choices=("global", "project"))
+    install_skills_parser.add_argument("--project")
+    install_skills_parser.add_argument("--codex-home")
+    install_skills_parser.add_argument("--cursor-home")
+    install_skills_parser.add_argument("--bin-dir")
+    install_skills_parser.add_argument("-U", "--upgrade", action="store_true")
+    install_skills_parser.add_argument("--force", action="store_true", help=argparse.SUPPRESS)
+    install_skills_parser.set_defaults(func=install_skills)
+
+    install_codex_parser = subparsers.add_parser("install-codex", help="Install Codex skills globally")
     install_codex_parser.add_argument("--codex-home")
     install_codex_parser.add_argument("--bin-dir")
-    install_codex_parser.add_argument("--force", action="store_true")
+    install_codex_parser.add_argument("-U", "--upgrade", action="store_true")
+    install_codex_parser.add_argument("--force", action="store_true", help=argparse.SUPPRESS)
     install_codex_parser.set_defaults(func=install_codex)
 
     setup_parser = subparsers.add_parser("setup-project", help="Initialize .ai-workflow runtime in a project")
     setup_parser.add_argument("--project")
-    setup_parser.add_argument("--export-cursor", action="store_true")
-    setup_parser.add_argument("--force", action="store_true")
+    setup_parser.add_argument("--install-cursor-skills", action="store_true")
+    setup_parser.add_argument("--export-cursor", action="store_true", help=argparse.SUPPRESS)
+    setup_parser.add_argument("-U", "--upgrade", action="store_true")
+    setup_parser.add_argument("--force", action="store_true", help=argparse.SUPPRESS)
     setup_parser.set_defaults(func=setup_project)
 
-    export_cursor_parser = subparsers.add_parser("export-cursor", help="Export Cursor skills into a project")
+    export_cursor_parser = subparsers.add_parser("export-cursor", help="Install Cursor skills into a project")
     export_cursor_parser.add_argument("--project")
-    export_cursor_parser.add_argument("--force", action="store_true")
+    export_cursor_parser.add_argument("-U", "--upgrade", action="store_true")
+    export_cursor_parser.add_argument("--force", action="store_true", help=argparse.SUPPRESS)
     export_cursor_parser.set_defaults(func=export_cursor)
 
     new_idea_parser = subparsers.add_parser("new-idea", help="Create an idea artifact")

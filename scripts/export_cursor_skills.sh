@@ -10,4 +10,4 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PROJECT_DIR="$(cd "$1" && pwd)"
 
-uv run --directory "${REPO_ROOT}" forgeflow export-cursor --project "${PROJECT_DIR}" --force
+uv run --directory "${REPO_ROOT}" forgeflow install-skills --target cursor --scope project --project "${PROJECT_DIR}" -U

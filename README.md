@@ -38,14 +38,14 @@ uv tool upgrade forgeflow
 
 ```bash
 uv tool upgrade forgeflow
-forgeflow install-codex --force
+forgeflow install-skills --target codex --scope global -U
 ```
 
-Cursor 向け skill export を使っている project では、対象 project で再 export します。
+Cursor 向け skill を project local に入れている場合は、対象 project で更新します。
 
 ```bash
 cd /path/to/your-project
-forgeflow export-cursor --project . --force
+forgeflow install-skills --target cursor --scope project --project . -U
 ```
 
 ローカル clone から使う開発時は、こちらでも install できます。
@@ -54,22 +54,31 @@ forgeflow export-cursor --project . --force
 uv tool install --from /path/to/forgeflow forgeflow
 ```
 
-### 2. Install Codex skills
+### 2. Install skills
 
 ```bash
-forgeflow install-codex --force
+forgeflow install-skills --target codex --scope global -U
 ```
 
-This installs:
+Examples:
 
-- Codex skills into `~/.codex/skills`
-- fallback launcher only if `forgeflow` is not already on your `PATH`
+- Codex global: `forgeflow install-skills --target codex --scope global -U`
+- Codex project local: `forgeflow install-skills --target codex --scope project --project . -U`
+- Cursor global: `forgeflow install-skills --target cursor --scope global -U`
+- Cursor project local: `forgeflow install-skills --target cursor --scope project --project . -U`
+
+Default recommendation:
+
+- Codex は global install
+- Cursor は project local install
+
+`-U` / `--upgrade` は既存の forgeflow skill を更新します。`.ai-workflow/` の runtime artifact は消しません。
 
 ### 3. Bootstrap a project
 
 ```bash
 cd /path/to/your-project
-forgeflow setup-project --project . --export-cursor --force
+forgeflow setup-project --project . --install-cursor-skills -U
 ```
 
 This creates:
@@ -77,14 +86,14 @@ This creates:
 - `.ai-workflow/ideas/`
 - `.ai-workflow/features/`
 - `.ai-workflow/README.md`
-- `.cursor/skills/` when `--export-cursor` is enabled
+- `.cursor/skills/` when `--install-cursor-skills` is enabled
 
 ## Core Commands / 主要コマンド
 
 ```bash
-forgeflow install-codex --force
-forgeflow setup-project --project . --export-cursor --force
-forgeflow export-cursor --project . --force
+forgeflow install-skills --target codex --scope global -U
+forgeflow setup-project --project . --install-cursor-skills -U
+forgeflow install-skills --target cursor --scope project --project . -U
 forgeflow new-idea --project . --slug guild-market
 forgeflow init-feature --project . --slug guild-market
 forgeflow status --project . --slug guild-market
@@ -213,6 +222,7 @@ forgeflow/
       cursor/skills/
   scripts/
     forgeflow.py
+    install_skills.sh
     install_codex.sh
     export_cursor_skills.sh
     bootstrap_project.sh
