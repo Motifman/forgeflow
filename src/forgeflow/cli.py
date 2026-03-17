@@ -475,7 +475,7 @@ def _check_feature(feature_dir: Path) -> list[str]:
         for heading in ("Critical", "Major", "Minor"):
             if not _has_header(review_text, heading):
                 findings.append(f"REVIEW.md missing {heading} subsection")
-        for label in ("Additional phases needed", "Files to revisit", "Decision", "Ship ready"):
+        for label in ("Additional phases needed", "Files to revisit", "Apply-now polish", "Deferred polish", "Decision", "Ship ready"):
             if not _has_nonempty_bullet(review_text, label):
                 findings.append(f"REVIEW.md missing follow-up value for '{label}'")
         if not re.search(r"(?m)^- Ship ready:\s*(yes|no)\s*$", review_text):
@@ -493,7 +493,7 @@ def _check_feature(feature_dir: Path) -> list[str]:
         delivered_bullets = re.findall(r"(?m)^- .+\S$", summary_text.split("# Delivered", 1)[1].split("#", 1)[0]) if "# Delivered" in summary_text else []
         if len(delivered_bullets) < 2:
             findings.append("SUMMARY.md delivered section should contain at least two concrete bullets")
-        for label in ("Final relevant test command(s)", "Final review status", "Merge or PR status"):
+        for label in ("Final relevant test command(s)", "Final review status", "Post-review polish", "Merge or PR status"):
             if not _has_nonempty_bullet(summary_text, label):
                 findings.append(f"SUMMARY.md missing evidence value for '{label}'")
 

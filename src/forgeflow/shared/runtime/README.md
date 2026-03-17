@@ -25,4 +25,6 @@
 
 - artifact は narrative ではなく、意思決定の証跡として扱う
 - `proposal`、`selected option`、`assumptions`、`reopen alignment if` を埋める
+- review artifact では blocker だけでなく、minor な気づきや polish 候補も残す
+- ship artifact では review 後に適用した polish と defer した polish を区別して残す
 - `forgeflow doctor` は空欄や stage gate 違反を workflow defect として扱う

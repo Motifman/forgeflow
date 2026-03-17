@@ -140,13 +140,13 @@ Plan revision is required when one of these is true:
 
 ### `flow-review`
 
-Checks implementation quality, testing rigor, and release readiness.
-実装品質、テスト品質、出荷可否を確認します。
+Checks implementation quality, testing rigor, and release readiness, while also capturing non-blocking observations and minor improvement opportunities.
+実装品質、テスト品質、出荷可否を確認しつつ、blocking でない気づきや minor 改善候補も残します。
 
 ### `flow-ship`
 
-Summarizes what shipped and how it is ready to land.
-最終成果と merge / PR 動線を明示します。
+Summarizes what shipped, how it is ready to land, and whether any review-driven polish was applied before shipping.
+最終成果と merge / PR 動線を明示し、review で見つかった軽微修正を ship 前に反映した場合はその証跡も残します。
 
 ## Glossary / 用語
 

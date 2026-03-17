@@ -21,9 +21,11 @@ Summarize what was achieved.
 # Remaining Work
 
 - None, or clearly scoped follow-up items
+- Include any deferred polish that was consciously left for later
 
 # Evidence
 
 - Final relevant test command(s):
 - Final review status:
+- Post-review polish:
 - Merge or PR status:
